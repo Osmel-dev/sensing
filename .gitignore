@@ -4,3 +4,8 @@ __pycache__/
 
 # VSCode
 .vscode/settings.json
+
+# Folders
+results/
+figures/
+scripts/
