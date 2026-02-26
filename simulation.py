@@ -16,13 +16,14 @@ S = 16                          # num. sensing antenna processing units (APUs)
 C = 4                           # num. comm. APUs = resource units (RUs)
 M = 4                           # num. antennas per APU 
 
-Uc = 4                          # num. real users per RU
+Uc = C*4                          # num. real users per RU
 Uv = 0                          # num. virtual users per RU
 U = Uc + Uv                     # num. devices per RU
 sectorRad = np.array([10, 30])   #
 sectorAngle = 15*np.pi/180      # sector angle opening 5 degrees
+Umax = 4 # max. num. devs per comm. APU
 
-K = U*C                         # num. subcarriers
+K = Umax*C                         # num. subcarriers
 N = 20                          # num. OFDM symbols
 fc = 6E9                        # central frequency [Hz]
 lambdac = constants.c/fc        # wavelength @fc [m]
@@ -46,49 +47,48 @@ alpha = .01
 posAPUs, interAPUSpacing = deployment.computeDeploymentAPUs(LRoom,M,Delta,S+C)
 
 # define the roles of the APUs "1" -> comm. "0" -> sensing
-roleAPUs = np.tile(np.array([0, 0, 0, 0, 1]),C)
+roleAPUs = np.tile(np.array([0, 1, 0, 0, 0]),C)
 
 # compute the antenna positions of each APU
 posAnts = deployment.computeAntPositions(posAPUs,M,Delta,LRoom)
 
 # device positions
-posDevs, idxAPUDevs = deployment.computeDevsDeployment(posAPUs,U,sectorRad,sectorAngle,roleAPUs,LRoom)
+posDevs, idxAPU2Dev = deployment.computeDevsDeployment(posAPUs,U,4,roleAPUs,LRoom)
 
 # generate K subCarriers with central freq. fc and separation df
 subCarriersFreq, subCarrierWavelength = waveforms.subCarriersGen(fc,K,df)
 
-# assign subCarriers to each of comm. APU
+# assign Umax subCarriers to each of comm. APU
 subCarrierBlockPerAPU = subCarriersFreq.size // C
 startSubCarrierPerAPU = np.arange(C) * subCarrierBlockPerAPU
 
-subCarrierFreqAlloc = np.zeros((U*C,1))
+subCarrierFreqAlloc = np.zeros((K,1))
 for i in range(C):
-    idxSubCarriers = startSubCarrierPerAPU[i] + np.arange(U)
-    idxDevs = np.arange(U) + U*i
+    idxSubCarriers = startSubCarrierPerAPU[i] + np.arange(Umax)
 
-    subCarrierFreqAlloc[idxDevs] = subCarriersFreq[idxSubCarriers]
+    subCarrierFreqAlloc[np.arange(Umax) + Umax*i] = subCarriersFreq[idxSubCarriers]
 
-# compute precoders 
-steeringVectors, precoders = arrays.computePrecoders(posAPUs,posDevs,idxAPUDevs,M,LRoom,Delta,subCarrierFreqAlloc,roleAPUs)
+# compute precoders (not OK)
+steeringVectors, precoders = arrays.computePrecoders(posAPUs,posDevs,idxAPU2Dev,M,LRoom,Delta,subCarrierFreqAlloc,roleAPUs)
 
 # generate the grid of points (discrete space)
 posPoints,radarCrossSection = deployment.computeMeasGrid(I**2,1,LRoom,L,1)
 
-utils.displayScenario(LRoom,posAPUs,posDevs,posAnts,S+C,posPoints,roleAPUs,radarCrossSection)
+utils.displayScenario(LRoom,posAPUs,posDevs,posAnts,S+C,posPoints,roleAPUs,radarCrossSection,idxAPU2Dev)
 
-# # channel matrix
-# H, tau = channels.computeChannelCoeffs(posPoints,subCarrierFreqAlloc,Uc,posAPUs,LRoom,Delta,M,roleAPUs,radarCrossSection)
+# channel matrix
+H, tau = channels.computeChannelCoeffs(posPoints,subCarrierFreqAlloc,Uc,posAPUs,LRoom,Delta,M,roleAPUs,radarCrossSection)
 
-# # transmitted symbols
-# qamSymbols = waveforms.gen16QAM(N,subCarrierFreqAlloc.size,seed=None)
-# ofdmSymbols = waveforms.genOFDMSym(precoders,txPow,subCarrierFreqAlloc.size,qamSymbols,M,N)
+# transmitted symbols
+qamSymbols = waveforms.gen16QAM(N,subCarrierFreqAlloc.size,seed=None)
+ofdmSymbols = waveforms.genOFDMSym(precoders,txPow,subCarrierFreqAlloc.size,qamSymbols,M,N)
 
-# # ADMM opt. loop
-# radarCrossSectionEst = optim.admmOptim(beta,mu,alpha,roleAPUs,Uc,subCarrierFreqAlloc,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,sigma2,H)
+# ADMM opt. loop
+radarCrossSectionEst = optim.admmOptim(beta,mu,alpha,roleAPUs,Uc,subCarrierFreqAlloc,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,sigma2,H)
 
-# # # Create two subplots and unpack the output array immediately
-# fig, (ax1, ax2) = plt.subplots(1, 2)
-# ax1.imshow(radarCrossSection.reshape((I,I)), aspect="auto")
-# ax2.imshow(radarCrossSectionEst.reshape((I,I)), aspect="auto")
+# # Create two subplots and unpack the output array immediately
+fig, (ax1, ax2) = plt.subplots(1, 2)
+ax1.imshow(radarCrossSection.reshape((I,I)), aspect="auto")
+ax2.imshow(radarCrossSectionEst.reshape((I,I)), aspect="auto")
 
-# plt.show()
+plt.show()

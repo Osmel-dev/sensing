@@ -8,15 +8,15 @@ def computeChannelCoeffs(posPoints,subCarrierFreq,totalDevsPerAPU,posAPUs,LRoom,
 
     Args
     -------------
-    posPoints : 2D Cartesian coordinates of the grid points (numOfPoints x 2)
-    subCarrierFreq : subcarriers frequency (nSubCarriers,1) [Hz]
+    posPoints : 2D Cartesian coordinates of the grid points (I**2 x 2)
+    subCarrierFreq : subcarriers frequency (K,1) [Hz]
     totalDevsPerAPU :
-    posAPUs : center position APUs (numAPUs, 2)
+    posAPUs : center position APUs (S+C, 2)
     LRoom : perimeter of the room [m]
     Delta : inter-antenna spacing [m]
     M : number of antennas per APU 
-    roleAPUs : roles of the APUs "1" communication and "0" sensing (1, numAPUs)
-    radarCrossSection : complex radar cross section of the points (numOfPoints,)
+    roleAPUs : roles of the APUs "1" communication and "0" sensing (S+C,1)
+    radarCrossSection : complex radar cross section of the points (I**2,)
 
     Returns
     -------------
