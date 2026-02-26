@@ -118,14 +118,15 @@ def computeAntPositions(posAPUs,antsPerAPU,Delta,LRoom):
 
     return posAnts
 
-def computeDevsDeployment(posAPUs,numDevsPerAPU,sectorRad,sectorAngle,roleAPUs,LRoom):
+def computeDevsDeployment(posAPUs,U,Umax,roleAPUs,LRoom):
     """
     Compute the 2D device positions corresponding to each APU
     
     Args
     -------------
     posAPUs : center position APUs (numAPUs, 2)
-    numDevsPerAPU : number of devices assigned to each APU
+    U : number of devices assigned to each APU
+    Umax : max. num. devs an APU can serve
     sectorRad : maximum distance from each APU to its associated devices [rmin, rmax]
     sectorAngle : opening APU angle where the served devices lie
     roleAPUs : roles of the APUs "1" communication and "0" sensing (1, numAPUs)
@@ -133,63 +134,47 @@ def computeDevsDeployment(posAPUs,numDevsPerAPU,sectorRad,sectorAngle,roleAPUs,L
 
     Returns
     -------------
-    posDevs : 2D positions of the devices (numCommAPUs*numDevsPerAPU, 2)
-    idxAPUDevs : devices to APU association vector (numCommAPUs*numDevsPerAPU, 1)
+    posDevs : 2D positions of the devices (U, 2)
+    idxAPUDevs : APU index serving the u-th dev. (U, 1)
     """
 
-    numCommAPUs = roleAPUs.sum()
     sideLength = LRoom/4
 
-    posDevs = np.zeros((numCommAPUs*numDevsPerAPU,2))
-    idxAPUDevs = np.zeros(numCommAPUs*numDevsPerAPU, dtype=int)
-    idx = 0
-    for idxAPU, role in enumerate(roleAPUs):
-        # select only communication APUs
-        if role == 1:
-            x, y = posAPUs[idxAPU]
+    # devs deployment [2, sideLength-2]
+    rng = np.random.default_rng(0)
+    posDevs = rng.random((U,2))*(sideLength-4) + 2
 
-            # Determine APUs orientation
-            if np.isclose(y, 0):                # bottom side
-                orientation = 0
-            elif np.isclose(x, sideLength):     # right side
-                orientation = np.pi/2
-            elif np.isclose(y, sideLength):     # top side
-                orientation = np.pi
-            elif np.isclose(x, 0):              # left side
-                orientation = 3*np.pi/2
-            else:
-                raise ValueError("APU not on any side")
-            
-            # build the rotation matrix
-            rotationMatrix = np.array([[np.cos(orientation), -np.sin(orientation)],
-                                       [np.sin(orientation), np.cos(orientation)]])
-            
-            # uniformly (in area) distributed deployment over an annulus sector
-            sectorAngleMax = np.pi/2 + sectorAngle
-            sectorAngleMin = np.pi/2 - sectorAngle
-            
-            devsAngles = (sectorAngleMin + np.random.rand(numDevsPerAPU)*
-                          (sectorAngleMax - sectorAngleMin))
-            
-            devsRadius = (np.sqrt(sectorRad[0]**2 + np.random.rand(numDevsPerAPU)*
-                                  (sectorRad[1]**2 - sectorRad[0]**2)))
-            
-            # device coordinates on a local sector oriented perpendicular to the
-            # bottom wall (x-axis) and centered at the y-axis.
-            xCartesianDevs = devsRadius*np.cos(devsAngles)
-            yCartesianDevs = devsRadius*np.sin(devsAngles)
+    # positions,num., and indeces of the comm. APUs
+    posCommAPUs = posAPUs[roleAPUs==1,:]
+    numCommAPUs = roleAPUs.sum()
+    idxCommAPUGlobal = np.flatnonzero(roleAPUs)
 
-            localSectorCoordinates = np.column_stack((xCartesianDevs,yCartesianDevs))
+    # check if the network capacity meets the demads
+    if numCommAPUs * Umax < U:
+        raise ValueError("Not enough total capacity to serve all devices.")
+     
+    # pairwise distances APUs-to-devs via Euclidean norm (U,T)
+    dist = np.linalg.norm(posDevs[:, None, :] - posCommAPUs[None, :, :], axis=2)
 
-            # range of device indeces that belong to the same APU
-            idxDevs = slice(idx*numDevsPerAPU, (idx+1)*numDevsPerAPU)
+    # orders by increasing distance the matrix dist and returns the (u,t)
+    # indexes of the ordered matrix
+    pairs = np.array(
+        np.unravel_index(
+            np.argsort(dist, axis=None), dist.shape)).T
+    
+    # 
+    capacity = np.full(numCommAPUs, Umax, dtype=int)
+    idxAPU2Dev = np.full(U, -1, dtype=int) 
 
-            # rotate and traslate the coordinates to the corresponding comm. APU
-            posDevs[idxDevs,:] = localSectorCoordinates @ rotationMatrix.T + posAPUs[idxAPU]
-            idxAPUDevs[idxDevs] = idxAPU
+    for idxDev, idxAPULocal in pairs:
+        if idxAPU2Dev[idxDev] == -1 and capacity[idxAPULocal] > 0:
+            idxAPU2Dev[idxDev] = idxCommAPUGlobal[idxAPULocal]
+            capacity[idxAPULocal] -= 1
 
-            idx += 1
-    return posDevs, idxAPUDevs
+        if np.all(idxAPU2Dev != -1) or np.all(capacity == 0):
+            break   
+
+    return posDevs, idxAPU2Dev
 
 def computeMeasGrid(I,sideMargin,LRoom,L,seed=None):
     """

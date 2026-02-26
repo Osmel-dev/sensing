@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-def displayScenario(roomPerimeter,positionAPUs,positionDevs,positionAnts,numAPUs,positionPoints,roleAPUs,radarCrossSection):
+def displayScenario(roomPerimeter,positionAPUs,positionDevs,positionAnts,numAPUs,positionPoints,roleAPUs,radarCrossSection,idxAPUDevs):
     """
     Display the APUs deployment
     
@@ -19,10 +19,17 @@ def displayScenario(roomPerimeter,positionAPUs,positionDevs,positionAnts,numAPUs
     ax.scatter(positionAPUs[roleAPUs==0,0], positionAPUs[roleAPUs==0,1], c='blue', s=50, label='sensing APU')
     ax.scatter(positionAPUs[roleAPUs==1,0], positionAPUs[roleAPUs==1,1], c='magenta', s=50, label='communication APU')
     
-    ax.scatter(positionDevs[:,0], positionDevs[:,1], c='green', s=25, label='Devices', marker='s')
-    nonZeroRadar = radarCrossSection != 0
-    color = np.where(nonZeroRadar, 'red', 'black')
-    ax.scatter(positionPoints[:,0], positionPoints[:,1], c=color, s=10, label='Points', marker='x')
+    ax.scatter(positionDevs[:,0], positionDevs[:,1], c='green', s=40, label='Devices', marker='s')
+
+    for t in range(positionAPUs.shape[0]):
+        ax.text(positionAPUs[t,0]+.5, positionAPUs[t,1]+.5, str(t), fontsize=9, ha='left', va='bottom')
+
+    for d in range(positionDevs.shape[0]):
+        ax.text(positionDevs[d,0]+.5, positionDevs[d,1]+.5, str(idxAPUDevs[d]), fontsize=8, ha='left', va='bottom')
+
+    # nonZeroRadar = radarCrossSection != 0
+    # color = np.where(nonZeroRadar, 'red', 'black')
+    # ax.scatter(positionPoints[:,0], positionPoints[:,1], c=color, s=10, label='Points', marker='x')
 
     for i in range(numAPUs):
         ax.scatter(positionAnts[i,:,0], positionAnts[i,:,1], c='black', s=15)

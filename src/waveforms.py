@@ -54,7 +54,7 @@ def genOFDMSym(precoders,powAllocation,K,qamSymbs,M,N):
 
     Parameters
     ----------
-    precoders : : normalized steering vectors (antsPerAPU, numDevsPerAPU*numCommAPUs)
+    precoders : : normalized steering vectors (M, U)
     powAllocation : power allocation comm. APUs
     K : num. of allocated subcarriers
     qamSymbs : normalized symbols (K, N)

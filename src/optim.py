@@ -42,8 +42,8 @@ def vectSignal(roleAPUs,Uc,subCarrierFreqAlloc,posAPUs,posPoints,LRoom,Delta,tau
     # vectorization step
     commAPUIdx = np.flatnonzero(roleAPUs == 1)
     sensingAPUIdxs = np.flatnonzero(roleAPUs == 0)
-    PhiSensingAPUs = np.zeros((M*N*Uc*C,I**2,S),dtype=complex)
-    YSensingAPU = np.zeros((M*N*Uc*C,S),dtype=complex)
+    PhiSensingAPUs = np.zeros((M*N*Uc,I**2,S),dtype=complex)
+    YSensingAPU = np.zeros((M*N*Uc,S),dtype=complex)
     for sensingAPUIdx in np.arange(S):
         Phi = []
         Y = []

@@ -66,38 +66,38 @@ def computeSteeringVecs(positionPoints,freq,posSensingAPU,posCommAPU,LRoom,antsP
 
     return steeringVectorsComm, steeringVectorsSensing, katriRaoProduct
 
-def computePrecoders(posAPUs,posDevs,idxAPUDevs,M,LRoom,Delta,subCarrWavelength,roleAPUs):
+def computePrecoders(posAPUs,posDevs,idxAPU2Dev,M,LRoom,Delta,subCarrWavelength,roleAPUs):
     """
     Compute the digital precoders. Each device is allocated to a different
     subcarrier and its precoder is computed as MRT. 
 
     Args
     -------------
-    posAPUs : center position APUs (numAPUs, 2)
-    posDevs : 2D positions of the devices (numCommAPUs*numDevsPerAPU, 2)
-    idxAPUDevs : devices to APU association vector (numCommAPUs*numDevsPerAPU, 1)
+    posAPUs : center position APUs (S+C, 2)
+    posDevs : 2D positions of the devices (U, 2)
+    idxAPU2Dev : devices to APU association vector (U, 1)
     M : number of antennas per APU 
     LRoom : perimeter of the room [m]
     Delta : inter-antenna spacing [m]
-    subCarrWavelength : [m]
-    roleAPUs : roles of the APUs "1" communication and "0" sensing (1, numAPUs)
+    subCarrWavelength : (K,1) [m]
+    roleAPUs : roles of the APUs "1" communication and "0" sensing (S+C,1)
 
     Returns
     -------------
-    steeringVectors : (antsPerAPU, numDevsPerAPU*numCommAPUs)
-    precoders : normalized steering vectors (antsPerAPU, numDevsPerAPU*numCommAPUs)
+    steeringVectors : (M, U)
+    precoders : normalized steering vectors (M, U)
     """
 
     sideLength = LRoom // 4
     m = np.arange(M)
 
-    numCommAPUs = roleAPUs.sum()
-    numDevsPerAPU = idxAPUDevs.size // numCommAPUs
+    # numCommAPUs = roleAPUs.sum()
+    U = idxAPU2Dev.size
 
-    steeringVectors = np.zeros((M,numDevsPerAPU*numCommAPUs), dtype=complex)
-    precoders = np.zeros((M,numDevsPerAPU*numCommAPUs), dtype=complex)
+    steeringVectors = np.zeros((M,U), dtype=complex)
+    precoders = np.zeros((M,U), dtype=complex)
 
-    for dev, apu in enumerate(idxAPUDevs):
+    for dev, apu in enumerate(idxAPU2Dev):
         #  print(f"dev {dev}, apu {apu}")
          
          x, y = posAPUs[apu]
