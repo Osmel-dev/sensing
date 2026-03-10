@@ -5,7 +5,7 @@ from .arrays import computeSteeringVecs
 def softThresholding(inputVec,threshold):
     return np.sign(inputVec)*np.maximum(np.abs(inputVec) - threshold, 0.0)
 
-def vectSignal(roleAPUs,Uc,subCarrierFreqAlloc,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,sigma2,H):
+def vectSignal(roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,noisePow2,H):
     """
     Vectorization step of the received signal in the form of a compressed
     sensing problem
@@ -47,24 +47,24 @@ def vectSignal(roleAPUs,Uc,subCarrierFreqAlloc,posAPUs,posPoints,LRoom,Delta,tau
     for sensingAPUIdx in np.arange(S):
         Phi = []
         Y = []
-        for subCarrierIdx, subCarrier in enumerate(subCarrierFreqAlloc):
+        for dev, subCarrier in enumerate(freqPerDev):
 
-            posCommAPU = posAPUs[commAPUIdx[subCarrierIdx // Uc]]
+            posCommAPU = posAPUs[idxAPU2Dev[dev]]
             posSensingAPU = posAPUs[sensingAPUIdxs[sensingAPUIdx]]
 
             _,_,katriRaoProd = computeSteeringVecs(posPoints,subCarrier,posSensingAPU,posCommAPU,LRoom,M,Delta)
             # subCarrierIdx = commAPUIdx[subCarrierIdx // Uc]
-            Theta = np.diag(np.exp(-1j*2*np.pi*subCarrier*tau[sensingAPUIdx,subCarrierIdx,:]))
+            Theta = np.diag(np.exp(-1j*2*np.pi*subCarrier*tau[sensingAPUIdx,dev,:]))
 
-            PhiFreq = np.kron(ofdmSymbols[:,:,subCarrierIdx].T,np.eye(M)) @ katriRaoProd @ Theta
+            PhiFreq = np.kron(ofdmSymbols[:,:,dev].T,np.eye(M)) @ katriRaoProd @ Theta
 
             Phi.append(PhiFreq)
 
             # noise vector 
-            noise = np.sqrt(sigma2/2)*(np.random.randn(M,N) + 1j*np.random.randn(M,N))
+            noise = np.sqrt(noisePow2/2)*(np.random.randn(M,N) + 1j*np.random.randn(M,N))
             
             # received signal at a given sensing APU at the subCarrier 
-            YFreq = H[sensingAPUIdx,subCarrierIdx,:,:] @ ofdmSymbols[:,:,subCarrierIdx] + noise
+            YFreq = H[sensingAPUIdx,dev,:,:] @ ofdmSymbols[:,:,dev] + noise
 
             Y.append(YFreq.ravel(order='F'))
 
@@ -76,7 +76,7 @@ def vectSignal(roleAPUs,Uc,subCarrierFreqAlloc,posAPUs,posPoints,LRoom,Delta,tau
 
     return PhiSensingAPUs, YSensingAPU
 
-def admmOptim(beta,mu,alpha,roleAPUs,Uc,subCarrierFreqAlloc,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,sigma2,H):
+def admmOptim(beta,mu,alpha,roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,sigma2,H):
     """
     Implements the ADMM optimization algorithm using the vectorized received
     signal 
@@ -102,21 +102,23 @@ def admmOptim(beta,mu,alpha,roleAPUs,Uc,subCarrierFreqAlloc,posAPUs,posPoints,LR
     Uc : num. devs per comm. APU
     C : num. comm. APUs
     """
+    absTol = 1E-2
+    relTol = 1E-2
+
     S, _, _, _ = H.shape
-    numPoints, _ = posPoints.shape
-    I = int(np.sqrt(numPoints))
+    I = int(np.sqrt(posPoints.shape[0])) 
     C = roleAPUs.sum()
     S = posAPUs.shape[0] - C
 
     # vectorization step
-    PhiSensingAPUs, YSensingAPU = vectSignal(roleAPUs,Uc,subCarrierFreqAlloc,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,sigma2,H)
+    PhiSensingAPUs, YSensingAPU = vectSignal(roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,sigma2,H)
 
     # ADMM var. initialization 
     z = np.zeros((I**2,S))
     zGPrev = np.zeros((I**2,))
     gamma = np.zeros((I**2,S))
 
-    for i in np.arange(50):
+    for i in np.arange(100):
         # update of local images
         for sensingAPUIdx in np.arange(S):
             phaseCorrection = np.angle(PhiSensingAPUs[:,:,sensingAPUIdx].conj().T @ YSensingAPU[:,sensingAPUIdx]) 
@@ -134,12 +136,20 @@ def admmOptim(beta,mu,alpha,roleAPUs,Uc,subCarrierFreqAlloc,posAPUs,posPoints,LR
         for sensingAPUIdx in np.arange(S):
             gamma[:,sensingAPUIdx] += beta*(z[:,sensingAPUIdx] - zGNext)
 
+        # print(i, "dual variable", np.linalg.norm(z,ord="fro"))
+        # primal and dual residuals (eqs. 21, 22)
         primalRes = z - zGNext[:,None]
         dualRes = beta*(zGNext - zGPrev)
-        # primalTol = 
-        # dualTol = 
-        print(i, np.linalg.norm(primalRes), np.linalg.norm(dualRes))
+        # print(np.linalg.norm(zGNext,ord=0))
+        # feasibility tolerances (eq. 24)
+        primalTol = np.sqrt(S*I**2)*absTol + np.maximum(np.linalg.norm(z), np.sqrt(S)*np.linalg.norm(zGNext))*relTol
+        dualTol = np.sqrt(S*I**2)*absTol + np.linalg.norm(gamma, ord='fro')*relTol
 
-        zGPrev = zGNext    
+        # stopping criteria
+        # print(i, np.linalg.norm(primalRes), primalTol)
+        # print(i, np.linalg.norm(dualRes), dualTol)
+        # print(i, primalTol, dualTol)
+        print(i, np.linalg.norm(primalRes,ord="fro"), np.linalg.norm(dualRes))
+        zGPrev = zGNext   
 
     return zGNext
