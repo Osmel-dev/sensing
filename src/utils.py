@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.ndimage import gaussian_filter
 
 def displayScenario(roomPerimeter,positionAPUs,positionDevs,positionAnts,numAPUs,positionPoints,roleAPUs,radarCrossSection,idxAPUDevs):
     """
@@ -42,3 +43,48 @@ def displayScenario(roomPerimeter,positionAPUs,positionDevs,positionAnts,numAPUs
     ax.legend(loc="center left",bbox_to_anchor=(1.02, 0.5),borderaxespad=0.0)
     plt.tight_layout()
     plt.show()
+
+def ssim(zTruth,zReconst):
+    """
+    Computes the structural similarity index between the reconstructed radar
+    image and a ground-truth scene
+
+    Args
+    -------------
+    alpha : opt. param.
+
+    Returns
+    -------------
+    zGNext : estimated radar cross section (I**2,)
+    """
+
+    sigmaGaussFilter = 1.5
+    radiusGaussFilter = 5
+
+    K1 = 0.01
+    K2 = 0.03 
+    
+    L = 1
+
+    C1 = (K1*L)**2
+    C2 = (K2*L)**2
+
+    # local means
+    muTruth = gaussian_filter(zTruth, sigma=sigmaGaussFilter, radius=radiusGaussFilter)
+    muReconst = gaussian_filter(zReconst, sigma=sigmaGaussFilter, radius=radiusGaussFilter)
+
+    # local variances
+    sigmaTruth = gaussian_filter(zTruth*zTruth, sigma=sigmaGaussFilter, radius=radiusGaussFilter) - muTruth**2
+    sigmaReconst = gaussian_filter(zReconst*zReconst, sigma=sigmaGaussFilter, radius=radiusGaussFilter) - muReconst**2
+
+    # local covariance
+    sigmaJoint = gaussian_filter(zTruth*zReconst, sigma=sigmaGaussFilter, radius=radiusGaussFilter) - muTruth*muReconst
+
+    # SSIM
+    num = (2*muTruth*muReconst + C1)*(2*sigmaJoint + C2)
+    den = (muTruth**2 + muReconst**2 + C1)*(sigmaTruth + sigmaReconst + C2)
+
+    ssimMap = num/den
+    mssim = np.mean(ssimMap)
+
+    return  mssim, ssimMap
