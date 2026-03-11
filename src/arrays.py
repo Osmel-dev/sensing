@@ -66,7 +66,7 @@ def computeSteeringVecs(positionPoints,freq,posSensingAPU,posCommAPU,LRoom,antsP
 
     return steeringVectorsComm, steeringVectorsSensing, katriRaoProduct
 
-def computePrecoders(posAPUs,posDevs,idxAPU2Dev,M,LRoom,Delta,freqPerDev,roleAPUs):
+def computePrecoders(posAPUs,posDevs,idxAPU2Dev,M,LRoom,Delta,freqPerDev):
     """
     Compute the digital precoders. Each device is allocated to a different
     subcarrier and its precoder is computed as MRT. 
@@ -88,7 +88,7 @@ def computePrecoders(posAPUs,posDevs,idxAPU2Dev,M,LRoom,Delta,freqPerDev,roleAPU
     precoders : normalized steering vectors (M, U)
     """
 
-    sideLength = LRoom // 4
+    sideLength = LRoom / 4
     m = np.arange(M)
 
     # numCommAPUs = roleAPUs.sum()

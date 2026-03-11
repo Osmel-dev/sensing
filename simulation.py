@@ -17,12 +17,8 @@ S = 16                          # num. sensing antenna processing units (APUs)
 C = 4                           # num. comm. APUs = resource units (RUs)
 M = 4                           # num. antennas per APU 
 
-Uc = C*4                          # num. real users per RU
-Uv = 0                          # num. virtual users per RU
-U = Uc + Uv                     # num. devices per RU
-# sectorRad = np.array([10, 30])   #
-# sectorAngle = 15*np.pi/180      # sector angle opening 5 degrees
-Umax = M # max. num. devs per comm. APU
+U = C*5                          # num. real users per RU
+Umax = 5 # max. num. devs per comm. APU
 
 K = Umax*C                         # num. subcarriers
 N = 20                          # num. OFDM symbols
@@ -36,8 +32,8 @@ delta = ...                     # discretized space resulution
 LRoom = 60*4                    # perimeter of the square room [m] 
 L = 10                           # number of scatterers
 
-txPow = np.ones((Uc,1))        # power allocation vector
-noisePow2 = 1                      # noise power
+txPow = np.ones(U)        # power allocation vector
+noisePow2 = 1e-6                      # noise power
 bw = 1                          # bandwidth [Hz]
 
 # ADMM parameters
@@ -49,13 +45,13 @@ alpha = .01
 posAPUs, interAPUSpacing = deployment.computeDeploymentAPUs(LRoom,M,Delta,S+C)
 
 # define the roles of the APUs "1" -> comm. "0" -> sensing
-roleAPUs = np.tile(np.array([0, 1, 0, 0, 0]),C)
+roleAPUs = np.tile(np.array([0, 0, 1, 0, 0]),C)
 
 # compute the antenna positions of each APU
 posAnts = deployment.computeAntPositions(posAPUs,M,Delta,LRoom)
 
 # device positions
-posDevs, idxAPU2Dev = deployment.computeDevsDeployment(posAPUs,U,4,roleAPUs,LRoom)
+posDevs, idxAPU2Dev = deployment.computeDevsDeployment(posAPUs,U,Umax,roleAPUs,LRoom,8)
 
 # generate K subCarriers with central freq. fc and separation df
 subCarriersFreq, subCarrierWavelength = waveforms.subCarriersGen(fc,K,df)
@@ -67,10 +63,10 @@ subCarriersFreq, subCarrierWavelength = waveforms.subCarriersGen(fc,K,df)
 subCarrierBlockPerAPU = subCarriersFreq.size // C
 startSubCarrierPerAPU = np.arange(C)*subCarrierBlockPerAPU
 
-idxCommAPUs = np.unique(idxAPU2Dev)
+idxCommAPUs = np.flatnonzero(roleAPUs == 1)
 
-subCarrierFreqAlloc = np.zeros((K,1))
-freqPerDev = np.zeros((Uc,1))
+subCarrierFreqAlloc = np.zeros(K)
+freqPerDev = np.zeros(U)
 for i, apu in enumerate(idxCommAPUs):
     # devs served by this APU
     idxUsersThisAPU = np.where(idxAPU2Dev == apu)[0]
@@ -85,7 +81,7 @@ for i, apu in enumerate(idxCommAPUs):
         freqPerDev[dev] = subCarriersFreq[idxSubCarriers[j]]
 
 # compute precoders
-steeringVectors, precoders = arrays.computePrecoders(posAPUs,posDevs,idxAPU2Dev,M,LRoom,Delta,freqPerDev,roleAPUs)
+steeringVectors, precoders = arrays.computePrecoders(posAPUs,posDevs,idxAPU2Dev,M,LRoom,Delta,freqPerDev)
 
 # generate the grid of points (discrete space)
 posPoints,radarCrossSection = deployment.computeMeasGrid(I**2,1,LRoom,L,1)
@@ -93,7 +89,7 @@ posPoints,radarCrossSection = deployment.computeMeasGrid(I**2,1,LRoom,L,1)
 # utils.displayScenario(LRoom,posAPUs,posDevs,posAnts,S+C,posPoints,roleAPUs,radarCrossSection,idxAPU2Dev)
 
 # channel matrix
-H, tau = channels.pointsChannelCoeffs(posPoints,freqPerDev,idxAPU2Dev,Uc,posAPUs,LRoom,Delta,M,roleAPUs,radarCrossSection)
+H, tau = channels.pointsChannelCoeffs(posPoints,freqPerDev,idxAPU2Dev,U,posAPUs,LRoom,Delta,M,roleAPUs,radarCrossSection)
 
 # transmitted symbols
 qamSymbols = waveforms.gen16QAM(N,freqPerDev.size,seed=None)
@@ -101,15 +97,15 @@ ofdmSymbols = waveforms.genOFDMSym(precoders,txPow,freqPerDev.size,qamSymbols,M,
 
 # compute rate
 sumRate = 0
-perAPURate = np.zeros((C,))
-perUserRate = np.zeros((Uc,))
+perAPURate = np.zeros(C)
+perUserRate = np.zeros(U)
 
 # devs channel
 HDev = channels.devsChannelCoeffs(posDevs,freqPerDev,posAPUs,LRoom,Delta,M,idxAPU2Dev)
 
 for dev, apu in enumerate(idxAPU2Dev):
     # per use rate
-    perUserRate[dev] = bw*np.log2(1 + np.linalg.norm(HDev[dev,:])**2/(noisePow2*bw))
+    perUserRate[dev] = bw*np.log2(1 + 10*np.linalg.norm(HDev[dev,:])**2/(noisePow2*bw))
 
     # per APU rate
     perAPURate[np.where(idxCommAPUs == apu)[0][0]] += perUserRate[dev]
@@ -124,20 +120,20 @@ print(
 )
 
 # ADMM opt. loop
-radarCrossSectionEst = optim.admmOptim(beta,mu,alpha,roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,noisePow2,H)
+radarCrossSectionEst = optim.admmOptim(beta,mu,alpha,roleAPUs,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,noisePow2,H,0)
 
-# scene = radarCrossSection.reshape(I,I)
-# scene = scene/np.max(scene)
+scene = radarCrossSection.reshape(I,I)
+scene = scene/np.max(scene)
 
-# reconst = radarCrossSectionEst.reshape(I,I)
-# reconst = reconst/np.max(reconst)
+reconst = radarCrossSectionEst.reshape(I,I)
+reconst = reconst/np.max(reconst)
 
-# mssim, _ = utils.ssim(scene,reconst)
-# print(mssim)
+mssim, _ = utils.ssim(scene,reconst)
+print(mssim)
 
-# # Create two subplots and unpack the output array immediately
-# fig, (ax1, ax2) = plt.subplots(1, 2)
-# ax1.imshow(scene, aspect="auto")
-# ax2.imshow(reconst, aspect="auto")
+# Create two subplots and unpack the output array immediately
+fig, (ax1, ax2) = plt.subplots(1, 2)
+ax1.imshow(scene, aspect="auto")
+ax2.imshow(reconst, aspect="auto")
 
-# plt.show()
+plt.show()

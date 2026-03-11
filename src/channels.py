@@ -66,6 +66,9 @@ def pointsChannelCoeffs(posPoints,freqPerDev,idxAPU2Dev,totalDevsPerAPU,posAPUs,
 
             subCarrWavelength = constants.c/subCarrier
 
+            # path loss
+            pathLossComm = 1 # (subCarrWavelength/(4*np.pi*np.linalg.norm(point - posCommAPU)))**2
+
             # steering vector
             steeringVectorComm = (np.exp(-1j*2*np.pi*(Delta/subCarrWavelength)*m*
                                          (ulaOrientationVector @ displacementVector)))
@@ -102,13 +105,16 @@ def pointsChannelCoeffs(posPoints,freqPerDev,idxAPU2Dev,totalDevsPerAPU,posAPUs,
                     # round trip delay
                     totalDelay = delayCommAPU + delaySensingAPU
 
+                    # path loss
+                    pathLossSens = 1 # (subCarrWavelength/(4*np.pi*np.linalg.norm(point - positionSensingAPU)))**2
+
                     # compute the index of the APU
                     idxSensingAPU = np.sum(roleAPUs[:idxAPU] == 0)
 
                     # matrix of channel coefficients
-                    channMx[idxSensingAPU,dev,:,:] = (channMx[idxSensingAPU,dev,:,:] + 
-                                                            radarCrossSection[pointIdx]*np.exp(-1j*2*np.pi*subCarrier*totalDelay)*
-                                                            np.outer(steeringVectorSensing, steeringVectorComm.conj()))
+                    channMx[idxSensingAPU,dev,:,:] = (np.sqrt(pathLossComm*pathLossSens)*channMx[idxSensingAPU,dev,:,:] + 
+                                                      radarCrossSection[pointIdx]*np.exp(-1j*2*np.pi*subCarrier*totalDelay)*
+                                                      np.outer(steeringVectorSensing, steeringVectorComm.conj()))
                     
                     # round trip delay matrix
                     roundTripDelay[idxSensingAPU,dev,pointIdx] = totalDelay
@@ -161,6 +167,6 @@ def devsChannelCoeffs(posDevs,freqPerDev,posAPUs,LRoom,Delta,M,idxAPU2Dev):
         pathLoss = (subCarrWavelength/(4*np.pi*np.linalg.norm(posDevs[dev] - posCommAPU)))**2
         
         # matrix of channel coefficients
-        channMx[dev,:] = pathLoss*(np.exp(-1j*2*np.pi*(Delta/subCarrWavelength)*m*
+        channMx[dev,:] = np.sqrt(pathLoss)*(np.exp(-1j*2*np.pi*(Delta/subCarrWavelength)*m*
                                         (ulaOrientationVector @ displacementVector)))
     return channMx

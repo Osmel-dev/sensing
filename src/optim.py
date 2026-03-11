@@ -5,7 +5,7 @@ from .arrays import computeSteeringVecs
 def softThresholding(inputVec,threshold):
     return np.sign(inputVec)*np.maximum(np.abs(inputVec) - threshold, 0.0)
 
-def vectSignal(roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,noisePow2,H):
+def vectSignal(roleAPUs,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,noisePow2,H,seed):
     """
     Vectorization step of the received signal in the form of a compressed
     sensing problem
@@ -14,8 +14,8 @@ def vectSignal(roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,t
     -------------
     S : num. sensing APUs
     I : sq. root of the num. of points in meas. grid
-    PhiSensingAPUs : sensing matrix APUs (M*N*Uc*C,I**2,S) 
-    YSensingAPU : vectorized meas. signal per APU (M*N*Uc*C,S)
+    PhiSensingAPUs : sensing matrix APUs (M*N*U,I**2,S) 
+    YSensingAPU : vectorized meas. signal per APU (M*N*U,S)
     beta : opt. param.
     mu : opt. param.
     alpha : opt. param.
@@ -28,7 +28,7 @@ def vectSignal(roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,t
     -------------
     M : num. ants per APU
     N : num. of OFDM symbs.
-    Uc : num. devs per comm. APU
+    U : num. devs
     C : num. comm. APUs
     """
 
@@ -38,12 +38,14 @@ def vectSignal(roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,t
     I = int(np.sqrt(numPoints))
     C = roleAPUs.sum()
     S = posAPUs.shape[0] - C
+    U = freqPerDev.size
+
+    rng = np.random.default_rng(seed)
 
     # vectorization step
-    commAPUIdx = np.flatnonzero(roleAPUs == 1)
     sensingAPUIdxs = np.flatnonzero(roleAPUs == 0)
-    PhiSensingAPUs = np.zeros((M*N*Uc,I**2,S),dtype=complex)
-    YSensingAPU = np.zeros((M*N*Uc,S),dtype=complex)
+    PhiSensingAPUs = np.zeros((M*N*U,I**2,S),dtype=complex)
+    YSensingAPU = np.zeros((M*N*U,S),dtype=complex)
     for sensingAPUIdx in np.arange(S):
         Phi = []
         Y = []
@@ -53,7 +55,7 @@ def vectSignal(roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,t
             posSensingAPU = posAPUs[sensingAPUIdxs[sensingAPUIdx]]
 
             _,_,katriRaoProd = computeSteeringVecs(posPoints,subCarrier,posSensingAPU,posCommAPU,LRoom,M,Delta)
-            # subCarrierIdx = commAPUIdx[subCarrierIdx // Uc]
+            
             Theta = np.diag(np.exp(-1j*2*np.pi*subCarrier*tau[sensingAPUIdx,dev,:]))
 
             PhiFreq = np.kron(ofdmSymbols[:,:,dev].T,np.eye(M)) @ katriRaoProd @ Theta
@@ -61,7 +63,7 @@ def vectSignal(roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,t
             Phi.append(PhiFreq)
 
             # noise vector 
-            noise = np.sqrt(noisePow2/2)*(np.random.randn(M,N) + 1j*np.random.randn(M,N))
+            noise = np.sqrt(noisePow2/2)*(rng.standard_normal((M,N)) + 1j*rng.standard_normal((M,N)))
             
             # received signal at a given sensing APU at the subCarrier 
             YFreq = H[sensingAPUIdx,dev,:,:] @ ofdmSymbols[:,:,dev] + noise
@@ -76,7 +78,7 @@ def vectSignal(roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,t
 
     return PhiSensingAPUs, YSensingAPU
 
-def admmOptim(beta,mu,alpha,roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,sigma2,H):
+def admmOptim(beta,mu,alpha,roleAPUs,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,sigma2,H,seed):
     """
     Implements the ADMM optimization algorithm using the vectorized received
     signal 
@@ -85,8 +87,8 @@ def admmOptim(beta,mu,alpha,roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,
     -------------
     S : num. sensing APUs
     I : sq. root of the num. of points in meas. grid
-    PhiSensingAPUs : sensing matrix APUs (M*N*Uc*C,I**2,S) 
-    YSensingAPU : vectorized meas. signal per APU (M*N*Uc*C,S)
+    PhiSensingAPUs : sensing matrix APUs (M*N*U,I**2,S) 
+    YSensingAPU : vectorized meas. signal per APU (M*N*U,S)
     beta : opt. param.
     mu : opt. param.
     alpha : opt. param.
@@ -99,7 +101,7 @@ def admmOptim(beta,mu,alpha,roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,
     -------------
     M : num. ants per APU
     N : num. of OFDM symbs.
-    Uc : num. devs per comm. APU
+    U : num. devs 
     C : num. comm. APUs
     """
     absTol = 1E-2
@@ -111,14 +113,14 @@ def admmOptim(beta,mu,alpha,roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,
     S = posAPUs.shape[0] - C
 
     # vectorization step
-    PhiSensingAPUs, YSensingAPU = vectSignal(roleAPUs,Uc,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,sigma2,H)
+    PhiSensingAPUs, YSensingAPU = vectSignal(roleAPUs,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,sigma2,H,seed)
 
     # ADMM var. initialization 
     z = np.zeros((I**2,S))
     zGPrev = np.zeros((I**2,))
     gamma = np.zeros((I**2,S))
 
-    for i in np.arange(100):
+    for i in np.arange(50):
         # update of local images
         for sensingAPUIdx in np.arange(S):
             phaseCorrection = np.angle(PhiSensingAPUs[:,:,sensingAPUIdx].conj().T @ YSensingAPU[:,sensingAPUIdx]) 

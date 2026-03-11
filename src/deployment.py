@@ -118,7 +118,7 @@ def computeAntPositions(posAPUs,antsPerAPU,Delta,LRoom):
 
     return posAnts
 
-def computeDevsDeployment(posAPUs,U,Umax,roleAPUs,LRoom):
+def computeDevsDeployment(posAPUs,U,Umax,roleAPUs,LRoom,seed):
     """
     Compute the 2D device positions corresponding to each APU
     
@@ -141,7 +141,7 @@ def computeDevsDeployment(posAPUs,U,Umax,roleAPUs,LRoom):
     sideLength = LRoom/4
 
     # devs deployment [2, sideLength-2]
-    rng = np.random.default_rng(0)
+    rng = np.random.default_rng(seed)
     posDevs = rng.random((U,2))*(sideLength-4) + 2
 
     # positions,num., and indeces of the comm. APUs

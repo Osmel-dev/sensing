@@ -17,10 +17,10 @@ def subCarriersGen(fc,K,subCarrierSpacing):
     """
     if K % 2:
         subCarriersIdx = np.arange(-(K-1)//2, (K-1)//2 + 1)
-        subCarriersFreq = (fc + subCarrierSpacing*subCarriersIdx)[:,None]
+        subCarriersFreq = (fc + subCarrierSpacing*subCarriersIdx)
     else:
         subCarriersIdx = np.arange(-K//2, K//2)
-        subCarriersFreq = (fc + subCarrierSpacing*(subCarriersIdx+0.5))[:,None]
+        subCarriersFreq = (fc + subCarrierSpacing*(subCarriersIdx+0.5))
 
     subCarrierWavelength = constants.c/subCarriersFreq
 
