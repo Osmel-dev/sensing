@@ -120,13 +120,25 @@ def admmOptim(beta,mu,alpha,roleAPUs,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRo
     zGPrev = np.zeros((I**2,))
     gamma = np.zeros((I**2,S))
 
+    gram = []
+    matched = []
+    for sensingAPUIdx in np.arange(S):
+        phaseCorrection = np.angle(PhiSensingAPUs[:,:,sensingAPUIdx].conj().T @ YSensingAPU[:,sensingAPUIdx])
+        PhiSensingAPUsCorrected = PhiSensingAPUs[:,:,sensingAPUIdx] @ np.diag(np.exp(1j*phaseCorrection))
+
+        gram.append(PhiSensingAPUsCorrected.conj().T @ PhiSensingAPUsCorrected)
+        matched.append(PhiSensingAPUsCorrected.conj().T @ YSensingAPU[:,sensingAPUIdx])
+
     for i in np.arange(50):
         # update of local images
         for sensingAPUIdx in np.arange(S):
-            phaseCorrection = np.angle(PhiSensingAPUs[:,:,sensingAPUIdx].conj().T @ YSensingAPU[:,sensingAPUIdx]) 
-            PhiSensingAPUsCorrected = PhiSensingAPUs[:,:,sensingAPUIdx] @ np.diag(np.exp(1j*phaseCorrection))
-            Mx = mu*PhiSensingAPUsCorrected.conj().T @ PhiSensingAPUsCorrected + beta*np.eye(I**2)        
-            vec = mu*PhiSensingAPUsCorrected.conj().T @ YSensingAPU[:,sensingAPUIdx] + beta*zGPrev - gamma[:,sensingAPUIdx]
+            # phaseCorrection = np.angle(PhiSensingAPUs[:,:,sensingAPUIdx].conj().T @ YSensingAPU[:,sensingAPUIdx]) 
+            # PhiSensingAPUsCorrected = PhiSensingAPUs[:,:,sensingAPUIdx] @ np.diag(np.exp(1j*phaseCorrection))
+            # Mx = mu*PhiSensingAPUsCorrected.conj().T @ PhiSensingAPUsCorrected + beta*np.eye(I**2)        
+            # vec = mu*PhiSensingAPUsCorrected.conj().T @ YSensingAPU[:,sensingAPUIdx] + beta*zGPrev - gamma[:,sensingAPUIdx]
+            # z[:,sensingAPUIdx] = np.maximum(np.real(np.linalg.solve(Mx,vec)),0.0)
+            Mx = mu*gram[sensingAPUIdx] + beta*np.eye(I**2)        
+            vec = mu*matched[sensingAPUIdx] + beta*zGPrev - gamma[:,sensingAPUIdx]
             z[:,sensingAPUIdx] = np.maximum(np.real(np.linalg.solve(Mx,vec)),0.0)
 
         # update of global image
@@ -141,10 +153,12 @@ def admmOptim(beta,mu,alpha,roleAPUs,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRo
         # print(i, "dual variable", np.linalg.norm(z,ord="fro"))
         # primal and dual residuals (eqs. 21, 22)
         primalRes = z - zGNext[:,None]
-        dualRes = beta*(zGNext - zGPrev)
+        dualRes = np.sqrt(S)*beta*(zGNext - zGPrev)
         # print(np.linalg.norm(zGNext,ord=0))
         # feasibility tolerances (eq. 24)
-        primalTol = np.sqrt(S*I**2)*absTol + np.maximum(np.linalg.norm(z), np.sqrt(S)*np.linalg.norm(zGNext))*relTol
+        primalTol = np.sqrt(S*I**2)*absTol + relTol*np.maximum(
+            np.linalg.norm(z, ord='fro'), np.sqrt(S)*np.linalg.norm(zGNext)
+            )
         dualTol = np.sqrt(S*I**2)*absTol + np.linalg.norm(gamma, ord='fro')*relTol
 
         # stopping criteria
