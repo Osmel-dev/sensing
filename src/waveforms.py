@@ -26,7 +26,7 @@ def subCarriersGen(fc,K,subCarrierSpacing):
 
     return subCarriersFreq, subCarrierWavelength
 
-def gen16QAM(N,K,seed=None):
+def gen16QAM(N,K,seed=0):
     """
     Generates the 16QAM symbols
 
@@ -68,6 +68,6 @@ def genOFDMSym(precoders,powAllocation,K,qamSymbs,M,N):
 
     ofdmSymbs = np.zeros((M,N,K),dtype=complex)
     for k in range(K):
-        ofdmSymbs[:,:,k] = np.sqrt(powAllocation[k]) * precoders[:,k][:,None] @ qamSymbs[k,:][None,:]
+        ofdmSymbs[:,:,k] = precoders[:,k][:,None] @ qamSymbs[k,:][None,:]
 
     return ofdmSymbs

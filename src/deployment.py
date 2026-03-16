@@ -1,5 +1,6 @@
 import numpy as np
 from scipy import constants
+from itertools import combinations
 
 def computeDeploymentAPUs(LRoom,M,Delta,numAPUs):
     """
@@ -215,3 +216,28 @@ def computeMeasGrid(I,sideMargin,LRoom,L,seed=None):
     radarCrossSection[scattererIdx] = 1
 
     return pointsPos, radarCrossSection
+
+def generateRoleAPUs(S, C):
+    """
+    Computes the roles of the APUs
+    
+    Args
+    -------------
+    S : description
+    C : description
+    
+    Returns
+    -------------
+    out : description
+    """
+    numAPUsPerSide = S + C
+
+    roleAPUsList = []
+    for commAPUs in combinations(range(numAPUsPerSide), C):
+        sidePattern = np.zeros(numAPUsPerSide, dtype=int)
+        sidePattern[list(commAPUs)] = 1
+
+        roleAPUs = np.tile(sidePattern, 4)
+        roleAPUsList.append(roleAPUs)
+
+    return np.vstack(roleAPUsList)

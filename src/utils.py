@@ -88,3 +88,57 @@ def ssim(zTruth,zReconst):
     mssim = np.mean(ssimMap)
 
     return  mssim, ssimMap
+
+def fusion(zGlobal,primalResiduals):
+    """
+    Docstring
+
+    Args
+    -------------
+    param : description
+
+    Returns
+    -------------
+    output : description
+    """
+
+    # convert lists to arrays
+    zGlobal = np.stack(zGlobal, axis=2)          
+    primalResiduals = np.asarray(primalResiduals, dtype=float)  
+
+    # ADMM residual confidence: compute the weighted sum of the recovered
+    # scenes. The weights are compued based on the norm of the primal residual.
+
+    weights = 1.0/(1e-10 + primalResiduals)
+    weights /= np.sum(weights)
+    zFusedWeighted = np.sum(zGlobal*weights[None, None,], axis=2)
+
+    # voting fusion: combine where each snapshot believes targets exist. Each
+    # "cell" or "pixel" is rated against a threshold and its value is turned
+    # into a '0' or '1' depending on whether it is above or below the threshold.
+    # Then the preprocessed schenes are added.
+
+    # relative threshold with respect to each snapshot peak
+    alpha = 0.5 
+    thresh = alpha*np.max(zGlobal, axis=(0, 1))
+
+    # binary support map per snapshot
+    votes_binary = zGlobal >= thresh[None, None, :]        
+
+    # number of votes per cell
+    zFusedVote = np.sum(votes_binary, axis=2)               
+
+    # likelihood fusion: uses a multiplicative fusion. Each snapshot is
+    # converted into a normalized nonnegative map. The maps of all snapshots are
+    # then multiplied.
+    
+    eps = 1e-12
+    gamma = 5.0
+
+    # probability-like map per snapshot
+    probMap = (np.abs(zGlobal)**gamma)
+    probMap /= np.sum(probMap, axis=(0, 1), keepdims=True) + eps  
+    zFusedLikelihood = np.sum(np.log(probMap + eps), axis=2)     
+
+
+    return zFusedWeighted, zFusedVote, zFusedLikelihood

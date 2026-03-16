@@ -5,7 +5,7 @@ from .arrays import computeSteeringVecs
 def softThresholding(inputVec,threshold):
     return np.sign(inputVec)*np.maximum(np.abs(inputVec) - threshold, 0.0)
 
-def vectSignal(roleAPUs,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,noisePow2,H,seed):
+def vectSignal(roleAPUs,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,noisePow2,H,seed=0):
     """
     Vectorization step of the received signal in the form of a compressed
     sensing problem
@@ -78,7 +78,7 @@ def vectSignal(roleAPUs,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,
 
     return PhiSensingAPUs, YSensingAPU
 
-def admmOptim(beta,mu,alpha,roleAPUs,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,sigma2,H,seed):
+def admmOptim(beta,mu,alpha,roleAPUs,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRoom,Delta,tau,ofdmSymbols,sigma2,H,iter,seed=0):
     """
     Implements the ADMM optimization algorithm using the vectorized received
     signal 
@@ -129,7 +129,7 @@ def admmOptim(beta,mu,alpha,roleAPUs,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRo
         gram.append(PhiSensingAPUsCorrected.conj().T @ PhiSensingAPUsCorrected)
         matched.append(PhiSensingAPUsCorrected.conj().T @ YSensingAPU[:,sensingAPUIdx])
 
-    for i in np.arange(50):
+    for i in np.arange(iter):
         # update of local images
         for sensingAPUIdx in np.arange(S):
             # phaseCorrection = np.angle(PhiSensingAPUs[:,:,sensingAPUIdx].conj().T @ YSensingAPU[:,sensingAPUIdx]) 
@@ -168,4 +168,4 @@ def admmOptim(beta,mu,alpha,roleAPUs,freqPerDev,idxAPU2Dev,posAPUs,posPoints,LRo
         print(i, np.linalg.norm(primalRes,ord="fro"), np.linalg.norm(dualRes))
         zGPrev = zGNext   
 
-    return zGNext
+    return zGNext, np.linalg.norm(primalRes,ord="fro")
